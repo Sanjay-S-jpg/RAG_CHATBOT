@@ -33,6 +33,7 @@ def create_vector_db(docs):
     vector_db = FAISS.from_documents(chunks, embeddings)
     print("[+] Vector Database locked and loaded!")
     
+    vector_db.save_local("faiss_index")
     return vector_db
 
 if __name__ == "__main__":

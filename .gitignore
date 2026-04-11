@@ -2,3 +2,4 @@ rag_env/
 __pycache__/
 .env
 *.db
+faiss_index/
