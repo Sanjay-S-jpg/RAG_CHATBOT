@@ -35,10 +35,3 @@ def create_vector_db(docs):
     
     vector_db.save_local("faiss_index")
     return vector_db
-
-if __name__ == "__main__":
-    target_url = "https://claysys.com"
-    raw_docs = get_website_data(target_url)
-    
-    # Pass the scraped data into our vector database creator
-    db = create_vector_db(raw_docs)

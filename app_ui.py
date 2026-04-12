@@ -1,22 +1,29 @@
 import os
+import re
 import chainlit as cl
+from bs4 import BeautifulSoup
 from dotenv import load_dotenv
 from langchain_groq import ChatGroq
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
+from langchain_community.document_loaders import RecursiveUrlLoader
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_classic.chains import create_retrieval_chain
 from langchain_classic.chains.combine_documents import create_stuff_documents_chain
 from langchain_core.prompts import ChatPromptTemplate
 
-# Load API keys
 load_dotenv()
 
-# The Prompt (Rules of the game)
+# HTML Cleaner
+def clean_html(html: str) -> str:
+    soup = BeautifulSoup(html, "lxml")
+    return re.sub(r"\n\n+", "\n\n", soup.text).strip()
+
 system_prompt = (
-    "You are a highly professional AI assistant for Claysys. "
+    "You are Nexus, a highly professional AI assistant. "
     "Use ONLY the following pieces of retrieved context to answer the user's question. "
-    "If the answer is not in the context, say 'I don't know based on the provided website data'. "
-    "Do not hallucinate or make things up.\n\n"
+    "If the answer is not in the context, say 'I cannot find the answer in the provided website data'. "
+    "Do not hallucinate.\n\n"
     "Context:\n{context}"
 )
 
@@ -25,49 +32,73 @@ prompt = ChatPromptTemplate.from_messages([
     ("human", "{input}"),
 ])
 
-# This runs ONE TIME when the user opens the webpage
 @cl.on_chat_start
 async def on_chat_start():
-    # Show a loading message in the UI
-    msg = cl.Message(content="Waking up the Llama 3.1 brain... Give me a sec, brahh.")
-    await msg.send()
+    # 1. Ask the judge for the URL right when they open the app
+    url_request = await cl.AskUserMessage(
+        content="👁️ **Nexus Controller Initialized.**\n\nPlease paste the target URL you want me to ingest and analyze:", 
+        timeout=120
+    ).send()
 
-    # 1. Load the math-translator
-    embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+    if url_request:
+        target_url = url_request["output"]
+        
+        # 2. Show a loading spinner so they know it's working
+        msg = cl.Message(content=f"Scraping `{target_url}`... Please wait, this takes a moment.")
+        await msg.send()
 
-    # 2. Load the saved Vector DB from Phase 3
-    vector_db = FAISS.load_local("faiss_index", embeddings, allow_dangerous_deserialization=True)
-    
-    # Grab the top 3 most relevant chunks
-    retriever = vector_db.as_retriever(search_kwargs={"k": 3}) 
+        try:
+            # 3. Scrape the URL live!
+            loader = RecursiveUrlLoader(url=target_url, max_depth=1, extractor=clean_html)
+            docs = loader.load()
+            
+            if not docs:
+                msg.content = "❌ Error: Could not extract any text from that URL. Try another one."
+                await msg.update()
+                return
 
-    # 3. Fire up Groq Engine
-    llm = ChatGroq(model_name="llama-3.1-8b-instant", temperature=0.2)
+            msg.content = f"✅ Extracted {len(docs)} pages. Slicing data into chunks..."
+            await msg.update()
 
-    # 4. Chain them together
-    question_answer_chain = create_stuff_documents_chain(llm, prompt)
-    rag_chain = create_retrieval_chain(retriever, question_answer_chain)
+            # 4. Chunk it
+            text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=100)
+            chunks = text_splitter.split_documents(docs)
 
-    # 5. Save the brain in the user's browser session memory
-    cl.user_session.set("rag_chain", rag_chain)
+            # 5. Embed and Vectorize (In RAM, so it's fresh for every new link)
+            msg.content = "🧮 Calculating vector embeddings..."
+            await msg.update()
+            
+            embeddings = HuggingFaceEmbeddings(model_name="all-MiniLM-L6-v2")
+            vector_db = FAISS.from_documents(chunks, embeddings)
+            retriever = vector_db.as_retriever(search_kwargs={"k": 3}) 
 
-    # Update the loading message
-    msg.content = "Brain connected! 🧠 What do you want to know about Claysys?"
-    await msg.update()
+            # 6. Connect the Brain
+            llm = ChatGroq(model_name="llama-3.1-8b-instant", temperature=0.2)
+            question_answer_chain = create_stuff_documents_chain(llm, prompt)
+            rag_chain = create_retrieval_chain(retriever, question_answer_chain)
 
-# This runs EVERY TIME the user types a message and hits enter
+            # Save to session memory
+            cl.user_session.set("rag_chain", rag_chain)
+
+            msg.content = f"🔥 **Ingestion Complete!** The Llama 3.1 brain has memorized `{target_url}`.\n\nWhat would you like to know about it?"
+            await msg.update()
+
+        except Exception as e:
+            msg.content = f"❌ An error occurred: {str(e)}"
+            await msg.update()
+
 @cl.on_message
 async def on_message(message: cl.Message):
-    # 1. Grab the brain from memory
     rag_chain = cl.user_session.get("rag_chain")
     
-    # 2. Send an empty message box to the UI (so we can fill it in)
+    if not rag_chain:
+        await cl.Message(content="Please provide a valid URL first!").send()
+        return
+
     res = cl.Message(content="Thinking...")
     await res.send()
     
-    # 3. Ask the Llama the question
     response = rag_chain.invoke({"input": message.content})
     
-    # 4. Update the empty message box with the real answer
     res.content = response["answer"]
     await res.update()
