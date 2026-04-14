@@ -98,7 +98,29 @@ async def on_message(message: cl.Message):
     res = cl.Message(content="Thinking...")
     await res.send()
     
+    # 1. Ask the Llama the question (this returns a dictionary with the answer AND the source chunks)
     response = rag_chain.invoke({"input": message.content})
     
-    res.content = response["answer"]
+    answer = response["answer"]
+    source_documents = response["context"] # These are the raw chunks from the website
+
+    # 2. Build the UI Dropdown Elements for the Sources
+    text_elements = []
+    if source_documents:
+        for source_idx, doc in enumerate(source_documents):
+            source_name = f"Source Chunk {source_idx + 1}"
+            # We added display="side" here so it hides in a drawer until clicked!
+            text_elements.append(
+                cl.Text(content=doc.page_content, name=source_name, display="side")
+            )
+        
+        # Add clickable reference names to the bottom of the bot's message
+        source_names = [text_el.name for text_el in text_elements]
+        answer += f"\n\n**🔍 Verified Sources:** {', '.join(source_names)}"
+    else:
+        answer += "\n\n*No sources found in the database.*"
+
+    # 3. Update the message on the screen with the text and the dropdown elements
+    res.content = answer
+    res.elements = text_elements
     await res.update()
