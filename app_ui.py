@@ -8,9 +8,13 @@ from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_community.vectorstores import FAISS
 from langchain_community.document_loaders import RecursiveUrlLoader, PyPDFLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
+
+# --- NEW MEMORY IMPORTS ---
+from langchain_classic.chains import create_history_aware_retriever
 from langchain_classic.chains import create_retrieval_chain
 from langchain_classic.chains.combine_documents import create_stuff_documents_chain
-from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.messages import HumanMessage, AIMessage
 
 load_dotenv()
 
@@ -19,6 +23,24 @@ def clean_html(html: str) -> str:
     soup = BeautifulSoup(html, "lxml")
     return re.sub(r"\n\n+", "\n\n", soup.text).strip()
 
+# ==========================================
+# MEMORY PROMPTS
+# ==========================================
+# 1. Teaches the bot to rewrite your question using the history so it makes sense to the search engine
+contextualize_q_system_prompt = (
+    "Given a chat history and the latest user question "
+    "which might reference context in the chat history, "
+    "formulate a standalone question which can be understood "
+    "without the chat history. Do NOT answer the question, "
+    "just reformulate it if needed and otherwise return it as is."
+)
+contextualize_q_prompt = ChatPromptTemplate.from_messages([
+    ("system", contextualize_q_system_prompt),
+    MessagesPlaceholder("chat_history"),
+    ("human", "{input}"),
+])
+
+# 2. The main answering prompt, now with a placeholder for the history
 system_prompt = (
     "You are Nexus, a highly professional AI assistant. "
     "Use ONLY the following pieces of retrieved context to answer the user's question. "
@@ -26,13 +48,13 @@ system_prompt = (
     "Do not hallucinate.\n\n"
     "Context:\n{context}"
 )
-
-prompt = ChatPromptTemplate.from_messages([
+qa_prompt = ChatPromptTemplate.from_messages([
     ("system", system_prompt),
+    MessagesPlaceholder("chat_history"),
     ("human", "{input}"),
 ])
 
-# 1. Startup is now clean and silent. It just waits for the user.
+
 @cl.on_chat_start
 async def on_chat_start():
     await cl.Message(
@@ -57,7 +79,6 @@ async def on_message(message: cl.Message):
                 msg.content = f"📄 Detected PDF: `{file.name}`. Extracting text...\n"
                 await msg.send()
                 
-                # Chainlit stores the uploaded file in a temporary path (file.path)
                 loader = PyPDFLoader(file.path)
                 docs = loader.load()
             else:
@@ -78,7 +99,6 @@ async def on_message(message: cl.Message):
             await cl.Message(content="⚠️ You need to feed me data first! Paste a URL or upload a PDF.").send()
             return
 
-        # --- The Math Engine (Same for both URLs and PDFs) ---
         if not docs:
             msg.content += "\n❌ Error: Could not extract any text. Try another file or link."
             await msg.update()
@@ -98,10 +118,15 @@ async def on_message(message: cl.Message):
         retriever = vector_db.as_retriever(search_kwargs={"k": 3}) 
 
         llm = ChatGroq(model_name="llama-3.1-8b-instant", temperature=0.2)
-        question_answer_chain = create_stuff_documents_chain(llm, prompt)
-        rag_chain = create_retrieval_chain(retriever, question_answer_chain)
+        
+        # --- WIRING THE MEMORY INTO THE CHAIN ---
+        history_aware_retriever = create_history_aware_retriever(llm, retriever, contextualize_q_prompt)
+        question_answer_chain = create_stuff_documents_chain(llm, qa_prompt)
+        rag_chain = create_retrieval_chain(history_aware_retriever, question_answer_chain)
 
+        # Save the chain and initialize an EMPTY memory list
         cl.user_session.set("rag_chain", rag_chain)
+        cl.user_session.set("chat_history", [])
 
         msg.content += "\n\n🔥 **Ingestion Complete!** The Nexus Llama brain is fully loaded.\n\nWhat would you like to know about this data?"
         await msg.update()
@@ -110,13 +135,36 @@ async def on_message(message: cl.Message):
     # ==========================================
     # PHASE 2: CHAT MODE (Brain is active)
     # ==========================================
+    # Pull the history out of session memory
+    chat_history = cl.user_session.get("chat_history")
+
     res = cl.Message(content="Thinking...")
     await res.send()
     
-    response = rag_chain.invoke({"input": message.content})
+    # Pass both the input AND the history to the LLM
+    response = rag_chain.invoke({
+        "input": message.content,
+        "chat_history": chat_history
+    })
+    
     answer = response["answer"]
     source_documents = response.get("context", []) 
 
+    # --- THE 5-MESSAGE MEMORY CAP ---
+    # Append the new Q&A to the history
+    chat_history.extend([
+        HumanMessage(content=message.content),
+        AIMessage(content=answer)
+    ])
+    
+    # Slicing: Keep only the last 10 messages (5 user questions + 5 AI answers)
+    if len(chat_history) > 10:
+        chat_history = chat_history[-10:]
+        
+    # Save the updated history back to the session
+    cl.user_session.set("chat_history", chat_history)
+
+    # UI Sources Dropdown Logic
     text_elements = []
     if source_documents:
         for source_idx, doc in enumerate(source_documents):
