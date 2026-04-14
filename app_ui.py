@@ -42,7 +42,7 @@ contextualize_q_prompt = ChatPromptTemplate.from_messages([
 
 # 2. The main answering prompt, now with a placeholder for the history
 system_prompt = (
-    "You are Nexus, a highly professional AI assistant. "
+    "You are Agent, a highly professional AI assistant. "
     "Use ONLY the following pieces of retrieved context to answer the user's question. "
     "If the answer is not in the context, say 'I cannot find the answer in the provided context'. "
     "Do not hallucinate.\n\n"
@@ -58,7 +58,7 @@ qa_prompt = ChatPromptTemplate.from_messages([
 @cl.on_chat_start
 async def on_chat_start():
     await cl.Message(
-        content="👁️ **Nexus Controller Initialized.**\n\nDrop a URL in the chat OR click the paperclip icon to upload a PDF file to begin ingestion."
+        content="👁️ **RAG AGENT Initialized.**\n\nDrop a URL in the chat OR click the paperclip icon to upload a PDF file to begin ingestion."
     ).send()
 
 @cl.on_message
@@ -150,7 +150,7 @@ async def on_message(message: cl.Message):
         cl.user_session.set("rag_chain", rag_chain)
         cl.user_session.set("chat_history", [])
 
-        msg.content += "\n\n🔥 **Ingestion Complete!** The Nexus Llama brain is fully loaded.\n\nWhat would you like to know about this data?"
+        msg.content += "\n\n🔥 **Ingestion Complete!** The RAGAgent Llama brain is fully loaded.\n\nWhat would you like to know about this data?"
         await msg.update()
         return
 
