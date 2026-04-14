@@ -88,11 +88,33 @@ async def on_message(message: cl.Message):
         # Scenario B: User pasted a link
         elif message.content.startswith("http"):
             target_url = message.content.strip()
-            msg.content = f"🌐 Detected URL: `{target_url}`. Scraping the web...\n"
+            msg.content = f"🌐 Detected URL: `{target_url}`. Putting on the fake mustache and scraping the web...\n"
             await msg.send()
             
-            loader = RecursiveUrlLoader(url=target_url, max_depth=1, extractor=clean_html)
-            docs = loader.load()
+            # The Fake ID (User-Agent header)
+            custom_headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8",
+                "Accept-Language": "en-US,en;q=0.5"
+            }
+            
+            # Wrap it in a try-except block so the UI doesn't crash if Cloudflare blocks us
+            try:
+                loader = RecursiveUrlLoader(
+                    url=target_url, 
+                    max_depth=1, 
+                    extractor=clean_html,
+                    headers=custom_headers # Passing the fake ID here!
+                )
+                docs = loader.load()
+                
+                if not docs:
+                    await cl.Message(content="🛡️ **Blocked by Anti-Bot Security!**\nThis website has military-grade protection (like Cloudflare). Please try a different URL or upload a PDF instead.").send()
+                    return
+
+            except Exception as e:
+                await cl.Message(content=f"⚠️ **Scraping Error:** The website rejected the connection or timed out. \n\n*Technical detail: {str(e)}*\n\nPlease try a different link or upload a PDF.").send()
+                return
         
         # Scenario C: User just typed normal text
         else:
