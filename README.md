@@ -57,7 +57,7 @@ To ensure high accuracy and minimal latency, the architecture separates ingestio
 ### 1. Clone the Repository  
 
 ```bash
-git clone <YOUR-GITHUB-REPO-LINK-HERE>
+git clone https://github.com/Sanjay-S-jpg/RAG_CHATBOT.git
 cd RAG_chatbot
 ```
 
