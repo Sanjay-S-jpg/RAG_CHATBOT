@@ -22,12 +22,14 @@ def clean_html(html: str) -> str:
     return re.sub(r"\n\n+", "\n\n", soup.text).strip()
 
 # ==========================================
-# THE PURE RAG PROMPT (No Memory BS)
+# THE PURE RAG PROMPT
 # ==========================================
 system_prompt = (
     "You are Nexus, a highly professional AI assistant. "
     "Use ONLY the following pieces of retrieved context to answer the user's question. "
     "If the answer is not in the context, say 'I cannot find the answer in the provided data'. "
+    "If you encounter the phrase '[email protected]', you MUST tell the user: "
+    "'The emails are present on the site, but are encrypted by Cloudflare's anti-bot firewall.' "
     "Do not hallucinate.\n\n"
     "Context:\n{context}"
 )

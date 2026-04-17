@@ -1,7 +1,7 @@
 # 🤖 Multi-Modal RAG Agent  
 ### Claysys AI Hackathon - Intelligence Division  
 
-🌐 **Live Demo:** 
+🌐 **Live Demo:** https://huggingface.co/spaces/sanjay33/Claysys-RAG-Agent
 
 ---
 
@@ -11,7 +11,7 @@ The Multi-Modal RAG Agent is an enterprise-grade, zero-latency Retrieval-Augment
 ---
 
 ## 🧠 Solution Approach  
-To ensure high accuracy and minimal latency, the architecture separates ingestion from generation. Documents and URLs are cleaned of HTML boilerplate, chunked into 1000-character overlapping segments to preserve context, and translated into mathematical vectors using local HuggingFace embeddings. When a user queries the bot, FAISS performs a real-time similarity search, retrieving only the top 3 most relevant chunks. These chunks, along with the chat history, are fed to the Llama 3.1 model, forcing it to generate answers strictly grounded in the provided context.  
+To ensure high accuracy and minimal latency, the architecture separates ingestion from generation. Documents and URLs are cleaned of HTML boilerplate, chunked into 1000-character overlapping segments to preserve context, and translated into mathematical vectors using local HuggingFace embeddings. When a user queries the bot, FAISS performs a real-time similarity search, retrieving only the top most relevant chunks. These chunks, along with the chat history, are fed to the Llama 3.1 model, forcing it to generate answers strictly grounded in the provided context.  
 
 ---
 
@@ -27,10 +27,7 @@ To ensure high accuracy and minimal latency, the architecture separates ingestio
   Hits the "minimal latency" requirement by leveraging Groq's specialized LPU hardware and the `llama-3.1-8b-instant` model.  
 
 - **Hallucination-Free Audit Trail:**  
-  Every AI response includes a "Verified Sources" dropdown, exposing the exact database chunks used to formulate the answer to guarantee accuracy.  
-
-- **Conversational Memory:**  
-  Engineered a `history_aware_retriever` to maintain a sliding-window memory of the last 5 interactions for natural follow-up questions.  
+  Every AI response includes a "Verified Sources" dropdown, exposing the exact database chunks used to formulate the answer to guarantee accuracy.    
 
 ---
 

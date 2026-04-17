@@ -1,4 +1,4 @@
-# 👁️ Welcome to RAGAGENT 
+# 👁️ Welcome to RAG-AGENT 
 ### RAG Intelligence Division
 
 This is a high-performance **Retrieval-Augmented Generation (RAG)** operative. The Llama 3.1 brain has fully ingested the mainframe of any URLs. 
