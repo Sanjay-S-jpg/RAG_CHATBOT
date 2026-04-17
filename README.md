@@ -15,7 +15,7 @@ To ensure high accuracy and minimal latency, the architecture separates ingestio
 
 ---
 
-## ✨ Core Features (Hackathon Requirements Met)  
+## ✨ Core Features 
 
 - **Dynamic "Any-URL" Ingestion:**  
   Bypasses basic WAFs (like Cloudflare) using User-Agent spoofing to recursively scrape and clean live website data.  
